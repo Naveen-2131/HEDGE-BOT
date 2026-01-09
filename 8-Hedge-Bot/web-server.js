@@ -158,12 +158,12 @@ async function initDeriv() {
                 };
 
                 if (prediction !== undefined && prediction !== null && prediction !== "") {
-                    // DIGITOVER and DIGITUNDER use 'barrier' for the prediction
-                    if (contractType === 'DIGITOVER' || contractType === 'DIGITUNDER') {
+                    // DIGITOVER, DIGITUNDER, and DIGITMATCH use 'barrier' for the prediction
+                    if (contractType === 'DIGITOVER' || contractType === 'DIGITUNDER' || contractType === 'DIGITMATCH') {
                         req.barrier = prediction.toString();
                     }
-                    // DIGITMATCH and DIGITDIFF use 'last_digit_prediction'
-                    else if (contractType === 'DIGITMATCH' || contractType === 'DIGITDIFF') {
+                    // DIGITDIFF uses 'last_digit_prediction'
+                    else if (contractType === 'DIGITDIFF') {
                         req.last_digit_prediction = parseInt(prediction);
                     }
                     // Higher/Lower and other non-digit contracts use 'barrier'
@@ -269,6 +269,15 @@ app.get('/api/status', (req, res) => {
         if (s.id >= 35 && s.id <= 44) {
             config.consecutiveCount = s.consecutiveCount;
             config.martingaleStakes = (s.martingaleStakes || []).join(', ');
+        }
+
+        if (s.id === 75) {
+            config.digits = (s.predictionDigits || []).join(', ');
+            config.tradeInterval = s.tradeInterval;
+            config.maxTotalStake = s.maxTotalStake;
+            config.appId = s.appId;
+            config.apiToken = s.apiToken;
+            config.duration = s.duration;
         }
 
         return {
@@ -407,10 +416,16 @@ app.post('/api/update/:id', (req, res) => {
             if (stake !== undefined) bot.stake = parseFloat(stake);
         }
 
-        // Differ Bot specific fields (35-44)
-        if (id >= 35 && id <= 44) {
-            if (consecutiveCount !== undefined) bot.consecutiveCount = parseInt(consecutiveCount);
-            // Stake and Symbol already handled above
+        // Hedge Match Bot specific fields (75)
+        if (id === 75) {
+            const { digits, tradeInterval, maxTotalStake, appId, apiToken } = req.body;
+            if (digits !== undefined) {
+                bot.predictionDigits = digits.split(',').map(d => parseInt(d.trim())).filter(n => !isNaN(n));
+            }
+            if (tradeInterval !== undefined) bot.tradeInterval = parseInt(tradeInterval);
+            if (maxTotalStake !== undefined) bot.maxTotalStake = parseFloat(maxTotalStake);
+            if (appId !== undefined) bot.appId = appId;
+            if (apiToken !== undefined) bot.apiToken = apiToken;
         }
 
         console.log(`✅ [Bot ${id}] Configuration Applied. Stake: ${bot.stake}, BaseStake: ${bot.baseStake}, MartingaleLevels: ${bot.maxMartingaleLevel + 1}`);
