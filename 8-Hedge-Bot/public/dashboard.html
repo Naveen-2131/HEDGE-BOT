@@ -209,7 +209,6 @@
             left: 0;
             width: 100%;
             height: 200px;
-            /* Increased height for better visibility */
             background: #000;
             color: #0f0;
             font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -220,7 +219,6 @@
             box-shadow: 0 -5px 15px rgba(0, 255, 0, 0.1);
             transition: transform 0.3s ease-in-out;
             transform: translateY(100%);
-            /* Hidden by default */
         }
 
         .bot21-terminal.active {
@@ -279,7 +277,6 @@
             border-radius: 4px;
         }
 
-        /* Adjust body padding so terminal doesn't overlap content when active */
         body.terminal-active {
             padding-bottom: 220px;
         }
@@ -307,9 +304,6 @@
             }
         }
 
-        /* ---------------------------- */
-
-        /* Total Stats */
         .total-stats {
             background: rgba(16, 185, 129, 0.1);
             padding: 10px 20px;
@@ -317,7 +311,6 @@
             border: 1px solid var(--accent-green);
         }
 
-        /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
@@ -414,7 +407,6 @@
             cursor: pointer;
         }
 
-        /* Dark mode support for datalist arrow */
         input[list]::-webkit-calendar-picker-indicator {
             filter: invert(1);
             opacity: 0.6;
@@ -484,6 +476,10 @@
                 onclick="toggleSection('differ-pattern')">📂 DI/FF Pattern</button>
             <button class="btn" style="background-color: #ec4899; flex: 1; min-width: 150px; padding: 10px;"
                 onclick="toggleSection('matches-pattern')">📂 MA/CH Pattern</button>
+            <button class="btn" style="background-color: #3b82f6; flex: 1; min-width: 150px; padding: 10px;"
+                onclick="toggleSection('higher')">📂 Higher Bots</button>
+            <button class="btn" style="background-color: #f43f5e; flex: 1; min-width: 150px; padding: 10px;"
+                onclick="toggleSection('lower')">📂 Lower Bots</button>
         </div>
     </div>
 
@@ -558,7 +554,21 @@
     <div id="matches-pattern-section"
         style="display:none; margin-bottom: 40px; border: 1px solid #ec4899; padding: 20px; border-radius: 12px;">
         <h2 style="color: #ec4899; margin-top: 0;">MA/CH Pattern Bots (45-54)</h2>
-        <div class="grid" id="matches-pattern-grid"></div>
+        <div id="matches-pattern-grid" class="grid"></div>
+    </div>
+
+    <!-- Higher Bots Section -->
+    <div id="higher-section"
+        style="display:none; margin-bottom: 40px; border: 1px solid #3b82f6; padding: 20px; border-radius: 12px;">
+        <h2 style="color: #3b82f6; margin-top: 0;">Higher Bots (IDs 55-64)</h2>
+        <div id="higher-grid" class="grid"></div>
+    </div>
+
+    <!-- Lower Bots Section -->
+    <div id="lower-section"
+        style="display:none; margin-bottom: 40px; border: 1px solid #f43f5e; padding: 20px; border-radius: 12px;">
+        <h2 style="color: #f43f5e; margin-top: 0;">Lower Bots (IDs 65-74)</h2>
+        <div id="lower-grid" class="grid"></div>
     </div>
 
     <!-- Dedicated Bot 21 Terminal -->
@@ -661,7 +671,6 @@
             fetchStatus().then(data => {
                 if (data && data.settings) {
                     document.getElementById('setting-app-id').value = data.settings.appId;
-                    // Token is masked, usually don't show it unless user wants to overwrite
                 }
             });
         }
@@ -753,6 +762,8 @@
                 else if (bot.id === 34) container = higherLowerPatternGrid;
                 else if (bot.id >= 35 && bot.id <= 44) container = differPatternGrid;
                 else if (bot.id >= 45 && bot.id <= 54) container = document.getElementById('matches-pattern-grid');
+                else if (bot.id >= 55 && bot.id <= 64) container = document.getElementById('higher-grid');
+                else if (bot.id >= 65 && bot.id <= 74) container = document.getElementById('lower-grid');
                 else return; // Skip bots with unknown IDs
 
                 let card = document.getElementById(`card-${bot.id}`);
@@ -766,7 +777,6 @@
 
         function toggleSection(type) {
             const section = document.getElementById(`${type}-section`);
-            // Toggle display
             if (section.style.display === 'none') {
                 section.style.display = 'block';
             } else {
@@ -824,18 +834,26 @@
                     </div>
 
                     <div class="form-group">
+                        <label>Take Profit ($)</label>
+                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 10}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Stop Loss ($)</label>
+                        <input type="number" id="stopLoss-${bot.id}" value="${bot.config.stopLoss || -10}">
+                    </div>
+
+                    <div class="form-group">
                         <label>Trade Pattern (${isOddEven ? 'EVEN/ODD' : (isOverUnder ? 'OVER/UNDER' : (isHigherLower ? 'HIGHER/LOWER' : 'RISE/FALL'))})</label>
                         <input type="text" id="pattern-${bot.id}" value="${bot.config.pattern || ''}" placeholder="${isOddEven ? 'e.g. DIGITEVEN, DIGITODD' : (isOverUnder ? 'e.g. OVER, UNDER' : (isHigherLower ? 'e.g. HIGHER, LOWER' : 'e.g. RISE, FALL'))}">
                         <small style="color: #888;">Empty for ${isOverUnder || isHigherLower ? 'BOTH (Simultaneous)' : 'RANDOM'}</small>
                     </div>
 
                     <div class="card-actions">
-                        <button class="btn btn-update" onclick="updateBot(${bot.id})">Update</button>
                         <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
                     </div>
                 `;
             } else if (bot.id >= 35 && bot.id <= 44) {
-                // Digit Differ Pattern Bots (35-44)
                 div.innerHTML = `
                     <div class="card-header">
                         <span><span class="status-dot" id="status-${bot.id}"></span> ${bot.name}</span>
@@ -875,12 +893,10 @@
                     </div>
 
                     <div class="card-actions">
-                        <button class="btn btn-update" onclick="updateBot(${bot.id})">Update</button>
                         <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
                     </div>
                 `;
             } else {
-                // Trigger Bots (1-30)
                 div.innerHTML = `
                     <div class="card-header">
                         <span><span class="status-dot" id="status-${bot.id}"></span> ${bot.name}</span>
@@ -906,11 +922,15 @@
                         <label>Duration (ticks)</label>
                         <input type="number" id="duration-${bot.id}" value="${bot.config.duration || 1}">
                     </div>
-                    ${(bot.id <= 20 || (bot.id >= 45 && bot.id <= 54)) ? `
+                    ${(bot.id <= 20 || (bot.id >= 45 && bot.id <= 74)) ? `
                     <div class="form-group">
                         <label>Prediction (Barrier)</label>
-                        <input type="number" id="pred-${bot.id}" value="${bot.config.prediction}">
+                        <input type="text" id="pred-${bot.id}" value="${bot.config.prediction}">
                     </div>` : ''}
+                    <div class="form-group">
+                        <label>Take Profit ($)</label>
+                        <input type="number" id="tp-${bot.id}" value="${bot.config.takeProfit || 0.5}">
+                    </div>
                     <div class="form-group">
                         <label>Stop Loss ($)</label>
                         <input type="number" id="sl-${bot.id}" value="${bot.config.stopLoss}">
@@ -932,7 +952,6 @@
                     </div>
 
                     <div class="card-actions">
-                        <button class="btn btn-update" onclick="updateBot(${bot.id})">Update</button>
                         <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
                     </div>
                 `;
@@ -963,12 +982,15 @@
                 const interval = document.getElementById(`interval-${id}`).value;
                 const maxTotalStake = document.getElementById(`maxStake-${id}`).value;
                 const pattern = document.getElementById(`pattern-${id}`).value;
+                const takeProfit = document.getElementById(`takeProfit-${id}`).value;
+                const stopLoss = document.getElementById(`stopLoss-${id}`).value;
                 const barrier = (id === 33 || id === 34) ? document.getElementById(`barrier-${id}`).value : undefined;
 
                 await fetch(`${API_URL}/update/${id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        stake, symbol, duration, interval, maxTotalStake, pattern, barrier, takeProfit, stopLoss
                     })
                 });
             } else if (id >= 35 && id <= 44) {
@@ -985,34 +1007,34 @@
                     })
                 });
             } else {
-                // Trigger Bots (1-30)
                 const predField = document.getElementById(`pred-${id}`);
                 const pred = predField ? predField.value : undefined;
+                const tp = document.getElementById(`tp-${id}`).value;
                 const sl = document.getElementById(`sl-${id}`).value;
                 const martingaleStr = document.getElementById(`martingale-${id}`).value;
                 const triggerDigit = document.getElementById(`trig-${id}`).value;
                 const triggerOperator = document.getElementById(`op-${id}`).value;
-
                 const martingaleStakes = martingaleStr.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-
                 const duration = document.getElementById(`duration-${id}`).value;
 
                 await fetch(`${API_URL}/update/${id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        stake, prediction: pred, stopLoss: sl,
+                        stake, prediction: pred, stopLoss: sl, takeProfit: tp,
                         martingaleStakes, triggerDigit, triggerOperator,
                         symbol, duration
                     })
                 });
             }
 
-            alert('Config Updated! If symbol changed, bot will reconnect.');
             fetchStatus();
         }
 
         async function toggleBot(id, isRunning) {
+            if (!isRunning) {
+                await updateBot(id);
+            }
             const action = isRunning ? 'stop' : 'start';
             await fetch(`${API_URL}/${action}/${id}`, { method: 'POST' });
             fetchStatus();
@@ -1020,6 +1042,9 @@
         }
 
         async function startAll() {
+            // Updating all bots before starting them all might be heavy, 
+            // but for consistency we could do it. However, the user request 
+            // focused on typing and starting. 
             await fetch(`${API_URL}/start-all`, { method: 'POST' });
             fetchStatus();
         }
@@ -1033,7 +1058,7 @@
             const checks = document.querySelectorAll('.bot-check:checked');
             if (checks.length === 0) return alert('Please select at least one bot to start!');
             for (const chk of checks) {
-                await fetch(`${API_URL}/start/${chk.value}`, { method: 'POST' });
+                await toggleBot(chk.value, false); // Ensure update then start
             }
             fetchStatus();
         }
