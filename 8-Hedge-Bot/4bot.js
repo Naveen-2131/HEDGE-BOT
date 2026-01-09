@@ -26,7 +26,7 @@ class SubStrategy {
         this.lastContractId = null;
         this.waitingForExit = false;
         this.sessionProfit = 0;
-        this.takeProfit = 0.50;
+        this.takeProfit = config.takeProfit || 0.50;
         this.stopLoss = config.stopLoss || -10;
         this.triggerDigit = config.triggerDigit !== undefined ? config.triggerDigit : 5;
         this.triggerOperator = config.triggerOperator || '=';
@@ -72,7 +72,6 @@ class SubStrategy {
         if (!this.isRunning) return;
         if (tick.symbol && (tick.symbol !== this.symbol)) return;
 
-
         if (this.lastContractId && this.waitingForExit) {
             if (this.isCheckingExit) return;
             if (this.processedContracts.has(this.lastContractId)) {
@@ -100,12 +99,17 @@ class SubStrategy {
                     }
 
                     if (profit > 0) {
-                        this.stake = this.baseStake;
                         this.martingaleLevel = 0;
+                        this.stake = this.baseStake;
                     } else {
                         this.martingaleLevel++;
                         if (this.martingaleLevel > this.maxMartingaleLevel) this.martingaleLevel = 0;
-                        this.stake = this.martingaleStakes[this.martingaleLevel];
+                        let nextStake = this.martingaleStakes[this.martingaleLevel];
+                        if (nextStake === undefined || nextStake === null || isNaN(nextStake)) {
+                            this.stake = this.baseStake;
+                        } else {
+                            this.stake = nextStake;
+                        }
                     }
                     this.lastContractId = null;
                     this.waitingForExit = false;
@@ -132,20 +136,25 @@ class SubStrategy {
         else triggered = currentDigit === this.triggerDigit;
 
         if (triggered) {
-            this.tradeCount++;
-            this.waitingForExit = true;
-            this.lastTradeTime = now;
-            try {
-                const trade = await this.bot.buy(this.contractType, this.stake, this.duration, this.durationUnit, this.prediction, this.symbol);
-                if (trade && trade.contract_id) {
-                    this.lastContractId = trade.contract_id;
-                } else {
-                    this.waitingForExit = false;
-                }
-            } catch (e) {
-                console.error(`[Bot ${this.id}] Buy Failed:`, e.message || e);
+            console.log(`[Bot ${this.id}] Trigger Met: Digit ${currentDigit} ${this.triggerOperator} ${this.triggerDigit}`);
+            this.executeTrade(now);
+        }
+    }
+
+    async executeTrade(now) {
+        this.tradeCount++;
+        this.waitingForExit = true;
+        this.lastTradeTime = now;
+        try {
+            const trade = await this.bot.buy(this.contractType, this.stake, this.duration, this.durationUnit, this.prediction, this.symbol);
+            if (trade && trade.contract_id) {
+                this.lastContractId = trade.contract_id;
+            } else {
                 this.waitingForExit = false;
             }
+        } catch (e) {
+            console.error(`[Bot ${this.id}] Buy Failed:`, e.message || e);
+            this.waitingForExit = false;
         }
     }
 }
@@ -179,6 +188,8 @@ class OddEvenPatternBot {
         this.isCheckingExit = false;
         this.processedContracts = new Set();
 
+        this.takeProfit = config.takeProfit || 10;
+        this.stopLoss = config.stopLoss || -10;
         this.profit = 0;
     }
 
@@ -251,6 +262,12 @@ class OddEvenPatternBot {
                     const result = p >= 0 ? "✅ PROFIT" : "❌ LOSS";
                     console.log(`🎯 [Bot ${this.id}] Trade ID: ${cid} → ${result} (${p.toFixed(2)} USD)`);
 
+                    if (this.sessionProfit >= this.takeProfit || this.sessionProfit <= this.stopLoss) {
+                        console.log(`[Bot ${this.id}] Target reached ($${this.sessionProfit.toFixed(2)}). Stopping.`);
+                        this.stop();
+                        return;
+                    }
+
                     if (this.totalStake >= this.maxTotalStake && this.pendingContracts.size === 0) {
                         console.log(`[Bot ${this.id}] Max total stake reached. Stopping.`);
                         this.stop();
@@ -321,12 +338,15 @@ class OverUnderPatternBot {
         this.tradeIndex = 0;
         this.barrier = config.barrier !== undefined ? parseInt(config.barrier) : 5;
 
+        this.takeProfit = config.takeProfit || 10;
+        this.stopLoss = config.stopLoss || -10;
+
         this.pendingContracts = new Set();
         this.isTrading = false;
         this.loop = null;
         this.isCheckingExit = false;
         this.processedContracts = new Set();
-        this.openContractsInfo = new Map(); // To track type/barrier for logging
+        this.openContractsInfo = new Map();
         this.profit = 0;
     }
 
@@ -402,6 +422,12 @@ class OverUnderPatternBot {
 
                     const result = p >= 0 ? "✅ PROFIT" : "❌ LOSS";
                     console.log(`🎯 [Bot ${this.id}] ${info.type} ${info.barrier} → ${result} (${p.toFixed(2)} USD)`);
+
+                    if (this.sessionProfit >= this.takeProfit || this.sessionProfit <= this.stopLoss) {
+                        console.log(`[Bot ${this.id}] Target reached ($${this.sessionProfit.toFixed(2)}). Stopping.`);
+                        this.stop();
+                        return;
+                    }
 
                     if (this.totalStake >= this.maxTotalStake && this.pendingContracts.size === 0) {
                         console.log(`[Bot ${this.id}] Max total stake reached. Stopping.`);
@@ -488,6 +514,9 @@ class HigherLowerPatternBot {
         this.tradeIndex = 0;
         this.barrier = config.barrier || '+0.1';
 
+        this.takeProfit = config.takeProfit || 10;
+        this.stopLoss = config.stopLoss || -10;
+
         this.pendingContracts = new Set();
         this.isTrading = false;
         this.loop = null;
@@ -569,6 +598,12 @@ class HigherLowerPatternBot {
 
                     const result = p >= 0 ? "✅ PROFIT" : "❌ LOSS";
                     console.log(`🎯 [Bot ${this.id}] ${info.type} → ${result} (${p.toFixed(2)} USD)`);
+
+                    if (this.sessionProfit >= this.takeProfit || this.sessionProfit <= this.stopLoss) {
+                        console.log(`[Bot ${this.id}] Target reached ($${this.sessionProfit.toFixed(2)}). Stopping.`);
+                        this.stop();
+                        return;
+                    }
 
                     if (this.totalStake >= this.maxTotalStake && this.pendingContracts.size === 0) {
                         console.log(`[Bot ${this.id}] Max total stake reached. Stopping.`);
@@ -654,6 +689,8 @@ class RiseFallPatternBot {
         this.isCheckingExit = false;
         this.processedContracts = new Set();
 
+        this.takeProfit = config.takeProfit || 10;
+        this.stopLoss = config.stopLoss || -10;
         this.profit = 0;
     }
 
@@ -725,6 +762,12 @@ class RiseFallPatternBot {
 
                     const result = p >= 0 ? "✅ PROFIT" : "❌ LOSS";
                     console.log(`🎯 [Bot ${this.id}] Trade ID: ${cid} → ${result} (${p.toFixed(2)} USD)`);
+
+                    if (this.sessionProfit >= this.takeProfit || this.sessionProfit <= this.stopLoss) {
+                        console.log(`[Bot ${this.id}] Target reached ($${this.sessionProfit.toFixed(2)}). Stopping.`);
+                        this.stop();
+                        return;
+                    }
 
                     if (this.totalStake >= this.maxTotalStake && this.pendingContracts.size === 0) {
                         console.log(`[Bot ${this.id}] Max total stake reached. Stopping.`);
@@ -1046,6 +1089,32 @@ class FourBotStrategy {
                 stakes: defaultStakes,
                 symbol: 'R_100',
                 duration: 1
+            }));
+        }
+
+        // 55-64 New Higher Bots
+        for (let i = 1; i <= 10; i++) {
+            const id = i + 54;
+            this.strategies.push(new SubStrategy(id, {
+                name: `Higher Bot ${i}`,
+                type: 'CALL', // CALL is used for Higher when a barrier (+X) is provided
+                prediction: '+0.1',
+                stakes: defaultStakes,
+                symbol: 'R_100',
+                duration: 5
+            }));
+        }
+
+        // 65-74 New Lower Bots
+        for (let i = 1; i <= 10; i++) {
+            const id = i + 64;
+            this.strategies.push(new SubStrategy(id, {
+                name: `Lower Bot ${i}`,
+                type: 'PUT', // PUT is used for Lower when a barrier (-X) is provided
+                prediction: '-0.1',
+                stakes: defaultStakes,
+                symbol: 'R_100',
+                duration: 5
             }));
         }
     }
