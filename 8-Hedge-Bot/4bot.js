@@ -977,6 +977,128 @@ class DigitDifferPatternBot {
 }
 
 // Odd/Even Bot Class (Supports Patterns)
+class HedgeMatchBot {
+    constructor(id, config) {
+        this.id = id;
+        this.name = config.name;
+        this.bot = null;
+        this.isRunning = false;
+
+        this.symbol = config.symbol || 'R_100';
+        this.stake = config.stake || 0.35;
+        this.duration = config.duration || 10;
+        this.durationUnit = 't';
+        this.tradeInterval = config.tradeInterval || 1000;
+        this.maxTotalStake = config.maxTotalStake || 9.5;
+        this.predictionDigits = config.digits || [0, 3, 2, 4, 1, 9, 6, 8, 5, 7];
+
+        this.appId = config.appId;
+        this.apiToken = config.apiToken;
+
+        this.sessionProfit = 0;
+        this.tradeCount = 0;
+        this.totalStake = 0;
+        this.tradeIndex = 0;
+
+        this.isTrading = false;
+        this.loop = null;
+        this.openContracts = new Set();
+        this.profit = 0; // Cumulative profit for UI
+    }
+
+    onStart(bot) {
+        this.bot = bot;
+        console.log(`[Bot ${this.id}] ${this.name} Loaded`);
+    }
+
+    start() {
+        if (!this.isRunning) {
+            this.isRunning = true;
+            this.totalStake = 0;
+            this.tradeIndex = 0;
+            this.sessionProfit = 0;
+            this.tradeCount = 0;
+            this.openContracts.clear();
+            this.beginTradingLoop();
+            console.log(`[Bot ${this.id}] STARTED.`);
+        }
+    }
+
+    stop() {
+        this.isRunning = false;
+        if (this.loop) {
+            clearInterval(this.loop);
+            this.loop = null;
+        }
+        console.log(`[Bot ${this.id}] STOPPED. Total Profit: ${this.sessionProfit.toFixed(2)}`);
+    }
+
+    beginTradingLoop() {
+        this.loop = setInterval(async () => {
+            if (!this.isRunning || this.isTrading || this.totalStake >= this.maxTotalStake) return;
+
+            this.isTrading = true;
+            const currentDigit = this.predictionDigits[this.tradeIndex % this.predictionDigits.length];
+            console.log(`[Bot ${this.id}] Next Trade → Digit ${currentDigit}`);
+
+            try {
+                // Using our unified buy function
+                const trade = await this.bot.buy('DIGITMATCH', this.stake, this.duration, this.durationUnit, currentDigit, this.symbol);
+
+                if (trade && trade.contract_id) {
+                    const id = trade.contract_id;
+                    this.openContracts.add(id);
+                    this.totalStake += this.stake;
+                    this.tradeCount++;
+                    console.log(`[Bot ${this.id}] Trade Executed: Match ${currentDigit} | Stake: ${this.totalStake.toFixed(2)} / ${this.maxTotalStake}`);
+
+                    if (this.totalStake >= this.maxTotalStake) {
+                        console.log(`[Bot ${this.id}] Max total stake reached. Waiting for contracts to close.`);
+                    }
+
+                    // Schedule checking this contract
+                    this.monitorContract(id, currentDigit);
+                }
+            } catch (e) {
+                console.error(`[Bot ${this.id}] Trade Error:`, e.message);
+            } finally {
+                this.tradeIndex++;
+                setTimeout(() => { this.isTrading = false; }, this.tradeInterval);
+            }
+        }, this.tradeInterval);
+    }
+
+    async monitorContract(contractId, digit) {
+        let sold = false;
+        while (this.isRunning && !sold) {
+            try {
+                const contract = await this.bot.checkContract(contractId);
+                if (contract && contract.is_sold) {
+                    sold = true;
+                    const profit = parseFloat(contract.profit);
+                    this.sessionProfit += profit;
+                    this.profit = this.sessionProfit; // Sync for status
+                    const result = profit >= 0 ? "✅ PROFIT" : "❌ LOSS";
+                    console.log(`[Bot ${this.id}] Result: Digit ${digit} → ${result} (${profit.toFixed(2)} USD) | Total: ${this.sessionProfit.toFixed(2)}`);
+                    this.openContracts.delete(contractId);
+
+                    if (!this.isRunning || (this.totalStake >= this.maxTotalStake && this.openContracts.size === 0)) {
+                        console.log(`[Bot ${this.id}] All contracts finished. Stopping.`);
+                        this.stop();
+                    }
+                }
+            } catch (e) {
+                // Ignore small errors in monitoring
+            }
+            if (!sold) await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+
+    async onTick(tick, now) {
+        // Interval-driven, so onTick is mostly for UI/status updates if needed
+    }
+}
+
 class FourBotStrategy {
     constructor() {
         this.strategies = [];
@@ -1117,6 +1239,18 @@ class FourBotStrategy {
                 duration: 5
             }));
         }
+
+
+        // 75 Hedge Match Bot
+        this.strategies.push(new HedgeMatchBot(75, {
+            name: `Hedge Match Bot 1`,
+            symbol: '1HZ100V',
+            stake: 0.35,
+            duration: 1,
+            tradeInterval: 1000,
+            maxTotalStake: 9.5,
+            digits: [0, 3, 2, 4, 1, 9, 6, 8, 5, 7]
+        }));
     }
 
     onStart(bot) {
