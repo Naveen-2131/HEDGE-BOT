@@ -151,17 +151,32 @@ async function initDeriv() {
                     contract_type: contractType,
                     currency: account && account.currency ? account.currency : 'USD',
                     symbol: symbol || 'R_100',
-                    duration: duration,
-                    duration_unit: unit,
+                    duration: parseInt(duration),
+                    duration_unit: unit || 't',
                     basis: 'stake',
-                    amount: amount
+                    amount: parseFloat(amount).toFixed(2) // Some Deriv types require string, others Number. toFixed returns string which is usually safest.
                 };
+
                 if (prediction !== undefined && prediction !== null && prediction !== "") {
-                    req.barrier = prediction.toString();
+                    // DIGITOVER and DIGITUNDER use 'barrier' for the prediction
+                    if (contractType === 'DIGITOVER' || contractType === 'DIGITUNDER') {
+                        req.barrier = prediction.toString();
+                    }
+                    // DIGITMATCH and DIGITDIFF use 'last_digit_prediction'
+                    else if (contractType === 'DIGITMATCH' || contractType === 'DIGITDIFF') {
+                        req.last_digit_prediction = parseInt(prediction);
+                    }
+                    // Higher/Lower and other non-digit contracts use 'barrier'
+                    else if (!contractType.includes('DIGIT')) {
+                        req.barrier = prediction.toString();
+                    }
+                    // Note: DIGITODD and DIGITEVEN do not need a prediction field.
                 }
+
 
                 const proposal = await api.basic.proposal(req);
                 if (proposal.error) {
+                    console.error('Proposal Request:', JSON.stringify(req));
                     console.error('Proposal Error Response:', JSON.stringify(proposal));
                     const msg = proposal.error.message || proposal.error.code || "Unknown Proposal Error";
                     throw new Error(msg);
@@ -172,7 +187,7 @@ async function initDeriv() {
                     throw new Error("Proposal not received from API");
                 }
 
-                const buy = await api.basic.buy({ buy: proposal.proposal.id, price: amount });
+                const buy = await api.basic.buy({ buy: proposal.proposal.id, price: parseFloat(amount) });
                 if (buy.error) {
                     console.error('Buy Error Response:', JSON.stringify(buy));
                     const msg = buy.error.message || buy.error.code || "Unknown Buy Error";
@@ -326,22 +341,60 @@ app.post('/api/update/:id', (req, res) => {
     if (bot) {
         const {
             stake, prediction, stopLoss, takeProfit, martingaleStakes,
-            triggerDigit, triggerOperator, symbol, duration
+            triggerDigit, triggerOperator, symbol, duration,
+            pattern, interval, maxTotalStake, barrier, consecutiveCount
         } = req.body;
 
-        if (stake !== undefined) bot.stake = parseFloat(stake);
-        if (prediction !== undefined) bot.prediction = parseInt(prediction);
+        console.log(`\n[API] Updating Bot ${id}:`, JSON.stringify(req.body));
+
+        // Basic fields
+        if (stake !== undefined) {
+            bot.stake = parseFloat(stake);
+            bot.baseStake = bot.stake;
+            if (bot.martingaleStakes && bot.martingaleStakes.length > 0) {
+                bot.martingaleStakes[0] = bot.stake;
+            }
+        }
+
+        if (prediction !== undefined) {
+            if (id >= 55 && id <= 74) {
+                bot.prediction = prediction.toString();
+            } else {
+                bot.prediction = parseInt(prediction);
+            }
+        }
+
         if (stopLoss !== undefined) bot.stopLoss = parseFloat(stopLoss);
         if (takeProfit !== undefined) bot.takeProfit = parseFloat(takeProfit);
-        if (martingaleStakes !== undefined) bot.martingaleStakes = martingaleStakes;
+
+        if (martingaleStakes !== undefined) {
+            let stakesArr = [];
+            if (Array.isArray(martingaleStakes)) {
+                stakesArr = martingaleStakes;
+            } else if (typeof martingaleStakes === 'string') {
+                stakesArr = martingaleStakes.split(',').map(s => parseFloat(s.trim())).filter(s => !isNaN(s));
+            }
+
+            if (stakesArr.length > 0) {
+                bot.martingaleStakes = stakesArr;
+                bot.maxMartingaleLevel = bot.martingaleStakes.length - 1;
+                bot.baseStake = bot.martingaleStakes[0]; // Martingale first index is always the reset stake
+            }
+        }
+
         if (triggerDigit !== undefined) bot.triggerDigit = parseInt(triggerDigit);
         if (triggerOperator !== undefined) bot.triggerOperator = triggerOperator;
-        if (symbol !== undefined) bot.symbol = symbol;
+
+        if (symbol !== undefined && symbol !== bot.symbol) {
+            console.log(`[Bot ${id}] Symbol changed: ${bot.symbol} -> ${symbol}`);
+            bot.symbol = symbol;
+            debounceInitDeriv();
+        }
+
         if (duration !== undefined) bot.duration = parseInt(duration);
 
         // Pattern Bot specific fields (31, 32, 33, 34)
         if (id === 31 || id === 32 || id === 33 || id === 34) {
-            const { pattern, interval, maxTotalStake, barrier } = req.body;
             if (pattern !== undefined) {
                 const arr = pattern.split(',').map(p => p.trim().toUpperCase()).filter(p => p !== "");
                 bot.tradePattern = arr;
@@ -350,26 +403,17 @@ app.post('/api/update/:id', (req, res) => {
             if (interval !== undefined) bot.minInterval = parseInt(interval);
             if (maxTotalStake !== undefined) bot.maxTotalStake = parseFloat(maxTotalStake);
             if ((id === 33 || id === 34) && barrier !== undefined) bot.barrier = barrier;
+            // Also update stake for pattern bots
+            if (stake !== undefined) bot.stake = parseFloat(stake);
         }
 
         // Differ Bot specific fields (35-44)
         if (id >= 35 && id <= 44) {
-            const { consecutiveCount, martingaleStakes } = req.body;
             if (consecutiveCount !== undefined) bot.consecutiveCount = parseInt(consecutiveCount);
-            if (martingaleStakes !== undefined) {
-                bot.martingaleStakes = martingaleStakes.split(',').map(s => parseFloat(s.trim())).filter(s => !isNaN(s));
-                bot.maxMartingaleLevel = bot.martingaleStakes.length - 1;
-            }
+            // Stake and Symbol already handled above
         }
 
-
-        if (config.symbol && config.symbol !== bot.symbol) {
-            console.log(`[Bot ${id}] Symbol changed: ${bot.symbol} -> ${config.symbol}`);
-            bot.symbol = config.symbol;
-            debounceInitDeriv();
-        }
-
-        console.log(`[API] Updated Bot ${id}`, config);
+        console.log(`✅ [Bot ${id}] Configuration Applied. Stake: ${bot.stake}, BaseStake: ${bot.baseStake}, MartingaleLevels: ${bot.maxMartingaleLevel + 1}`);
         res.json({ success: true });
     } else {
         res.status(404).json({ error: 'Bot not found' });
