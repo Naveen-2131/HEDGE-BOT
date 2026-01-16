@@ -280,6 +280,15 @@ app.get('/api/status', (req, res) => {
             config.duration = s.duration;
         }
 
+        if (s.id >= 76 && s.id <= 85) {
+            config.higherBarrier = s.higherBarrier;
+            config.lowerBarrier = s.lowerBarrier;
+            config.triggerDigit = s.triggerDigit;
+            config.triggerOperator = s.triggerOperator;
+            config.martingaleStakes = s.martingaleStakes;
+            config.duration = s.duration;
+        }
+
         return {
             id: s.id,
             name: s.name,
@@ -426,6 +435,18 @@ app.post('/api/update/:id', (req, res) => {
             if (maxTotalStake !== undefined) bot.maxTotalStake = parseFloat(maxTotalStake);
             if (appId !== undefined) bot.appId = appId;
             if (apiToken !== undefined) bot.apiToken = apiToken;
+        }
+
+        if (id >= 76 && id <= 85) {
+            const { higherBarrier, lowerBarrier, martingaleStr, triggerDigit, triggerOperator } = req.body;
+            if (higherBarrier !== undefined) bot.higherBarrier = higherBarrier;
+            if (lowerBarrier !== undefined) bot.lowerBarrier = lowerBarrier;
+            if (martingaleStr !== undefined) {
+                bot.martingaleStakes = martingaleStr.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+                bot.maxMartingaleLevel = bot.martingaleStakes.length - 1;
+            }
+            if (triggerDigit !== undefined) bot.triggerDigit = parseInt(triggerDigit);
+            if (triggerOperator !== undefined) bot.triggerOperator = triggerOperator;
         }
 
         console.log(`✅ [Bot ${id}] Configuration Applied. Stake: ${bot.stake}, BaseStake: ${bot.baseStake}, MartingaleLevels: ${bot.maxMartingaleLevel + 1}`);
