@@ -26,7 +26,7 @@ class SubStrategy {
         this.lastContractId = null;
         this.waitingForExit = false;
         this.sessionProfit = 0;
-        this.takeProfit = config.takeProfit || 0.50;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
         this.triggerDigit = config.triggerDigit !== undefined ? config.triggerDigit : 5;
         this.triggerOperator = config.triggerOperator || '=';
@@ -188,7 +188,7 @@ class OddEvenPatternBot {
         this.isCheckingExit = false;
         this.processedContracts = new Set();
 
-        this.takeProfit = config.takeProfit || 10;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
         this.profit = 0;
     }
@@ -338,7 +338,7 @@ class OverUnderPatternBot {
         this.tradeIndex = 0;
         this.barrier = config.barrier !== undefined ? parseInt(config.barrier) : 5;
 
-        this.takeProfit = config.takeProfit || 10;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
 
         this.pendingContracts = new Set();
@@ -514,7 +514,7 @@ class HigherLowerPatternBot {
         this.tradeIndex = 0;
         this.barrier = config.barrier || '+0.1';
 
-        this.takeProfit = config.takeProfit || 10;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
 
         this.pendingContracts = new Set();
@@ -689,7 +689,7 @@ class RiseFallPatternBot {
         this.isCheckingExit = false;
         this.processedContracts = new Set();
 
-        this.takeProfit = config.takeProfit || 10;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
         this.profit = 0;
     }
@@ -842,8 +842,9 @@ class DigitDifferPatternBot {
         this.tickHistory = [];
         this.lastTradeTime = 0;
 
-        this.takeProfit = config.takeProfit || 10;
+        this.takeProfit = config.takeProfit || 100;
         this.stopLoss = config.stopLoss || -10;
+        this.barrier = config.barrier;
 
         this.pendingContracts = new Set();
         this.isTrading = false;
@@ -958,10 +959,12 @@ class DigitDifferPatternBot {
         this.isTrading = true;
         this.lastTradeTime = now;
 
-        console.log(`🔥 [Bot ${this.id}] Pattern Detected: ${this.consecutiveCount} consecutive ${digit}'s! Buying DIGITDIFF ${digit}...`);
+        const tradeDigit = this.barrier !== undefined ? this.barrier : digit;
+
+        console.log(`🔥 [Bot ${this.id}] Pattern Detected: ${this.consecutiveCount} consecutive ticks! Buying DIGITDIFF ${tradeDigit}...`);
 
         try {
-            const t = await this.bot.buy('DIGITDIFF', this.stake, this.duration, this.durationUnit, digit, this.symbol);
+            const t = await this.bot.buy('DIGITDIFF', this.stake, this.duration, this.durationUnit, tradeDigit, this.symbol);
             if (t && t.contract_id) {
                 this.pendingContracts.add(t.contract_id);
                 this.totalStake += this.stake;
@@ -1099,17 +1102,199 @@ class HedgeMatchBot {
     }
 }
 
+class HedgeHigherLowerBot {
+    constructor(id, config) {
+        this.id = id;
+        this.name = config.name;
+        this.bot = null;
+        this.isRunning = false;
+
+        this.symbol = config.symbol || 'R_100';
+        this.martingaleStakes = config.martingaleStakes || [config.stake || 0.35];
+        this.martingaleLevel = 0;
+        this.maxMartingaleLevel = this.martingaleStakes.length - 1;
+        this.stake = this.martingaleStakes[0];
+
+        this.duration = config.duration || 5;
+        this.durationUnit = 't';
+
+        this.higherBarrier = config.higherBarrier || '+0.1';
+        this.lowerBarrier = config.lowerBarrier || '-0.1';
+
+        this.triggerDigit = config.triggerDigit !== undefined ? config.triggerDigit : 5;
+        this.triggerOperator = config.triggerOperator || '=';
+
+        this.takeProfit = config.takeProfit || 100;
+        this.stopLoss = config.stopLoss || -10;
+
+        this.sessionProfit = 0;
+        this.tradeCount = 0;
+        this.totalStake = 0;
+        this.pendingContracts = new Set();
+        this.isTrading = false;
+        this.isCheckingExit = false;
+        this.processedContracts = new Set();
+        this.batchResults = [];
+        this.profit = 0;
+    }
+
+    onStart(bot) {
+        this.bot = bot;
+        console.log(`[Bot ${this.id}] ${this.name} Loaded`);
+    }
+
+    start() {
+        if (!this.isRunning) {
+            this.isRunning = true;
+            this.resetSession();
+            console.log(`[Bot ${this.id}] STARTED.`);
+        }
+    }
+
+    stop() {
+        this.isRunning = false;
+        console.log(`[Bot ${this.id}] STOPPED.`);
+    }
+
+    resetSession() {
+        this.tradeCount = 0;
+        this.sessionProfit = 0;
+        this.profit = 0;
+        this.isTrading = false;
+        this.martingaleLevel = 0;
+        this.stake = this.martingaleStakes[0];
+        this.batchResults = [];
+    }
+
+    async onTick(tick, now) {
+        if (!this.isRunning && this.pendingContracts.size === 0) return;
+        if (tick.symbol && tick.symbol !== this.symbol) return;
+
+        // Check Exits
+        if (this.pendingContracts.size > 0 && !this.isCheckingExit) {
+            this.isCheckingExit = true;
+            try {
+                const contracts = Array.from(this.pendingContracts);
+                let batchFinished = true;
+
+                for (const cid of contracts) {
+                    if (this.processedContracts.has(cid)) {
+                        this.pendingContracts.delete(cid);
+                        continue;
+                    }
+
+                    const c = await this.bot.checkContract(cid);
+                    if (c && c.is_sold) {
+                        this.processedContracts.add(cid);
+                        this.pendingContracts.delete(cid);
+                        const p = parseFloat(c.profit);
+                        this.sessionProfit += p;
+                        this.profit = this.sessionProfit;
+                        this.batchResults.push(p >= 0);
+
+                        console.log(`🎯 [Bot ${this.id}] Contract ${cid} finished: ${p >= 0 ? '✅ PROFIT' : '❌ LOSS'} (${p.toFixed(2)} USD)`);
+                    } else {
+                        batchFinished = false;
+                    }
+                }
+
+                if (batchFinished && this.pendingContracts.size === 0) {
+                    // Evaluate Batch Result for Martingale
+                    // Only increase if BOTH lost (meaning if length is 2 and both are false)
+                    const allLost = this.batchResults.length === 2 && this.batchResults.every(r => r === false);
+
+                    if (allLost) {
+                        this.martingaleLevel++;
+                        if (this.martingaleLevel > this.maxMartingaleLevel) this.martingaleLevel = this.maxMartingaleLevel;
+                        console.log(`[Bot ${this.id}] BOTH LOST! Martingale Level: ${this.martingaleLevel}`);
+                    } else {
+                        this.martingaleLevel = 0;
+                        console.log(`[Bot ${this.id}] RESET! ${this.batchResults.includes(true) ? 'At least one won.' : 'Incomplete batch result.'}`);
+                    }
+
+                    this.stake = this.martingaleStakes[this.martingaleLevel];
+                    this.batchResults = []; // Reset for next trigger
+
+                    // Decide if we should do martingale or stop
+                    if (this.sessionProfit >= this.takeProfit || this.sessionProfit <= this.stopLoss) {
+                        console.log(`[Bot ${this.id}] Target reached. Session Profit: ${this.sessionProfit.toFixed(2)}. Stopping.`);
+                        this.stop();
+                    }
+                }
+            } catch (e) {
+                console.error(`[Bot ${this.id}] Error checking contracts:`, e.message);
+            } finally {
+                this.isCheckingExit = false;
+            }
+        }
+
+        if (!this.isRunning) return;
+
+        // Trigger Logic
+        const quoteStr = tick.quote.toString();
+        const currentDigit = parseInt(quoteStr.charAt(quoteStr.length - 1));
+
+        let match = false;
+        if (this.triggerOperator === '=') match = currentDigit === this.triggerDigit;
+        else if (this.triggerOperator === '>') match = currentDigit > this.triggerDigit;
+        else if (this.triggerOperator === '<') match = currentDigit < this.triggerDigit;
+
+        if (match && !this.isTrading && this.pendingContracts.size === 0) {
+            this.executeTrades(now);
+        }
+    }
+
+    async executeTrades(now) {
+        this.isTrading = true;
+        console.log(`🔥 [Bot ${this.id}] Trigger Match (${this.triggerOperator} ${this.triggerDigit})! Buying HIGHER and LOWER...`);
+
+        const hBarrier = this.higherBarrier;
+        const lBarrier = this.lowerBarrier;
+
+        let currentStake = this.stake;
+
+        try {
+            const results = await Promise.allSettled([
+                this.bot.buy('CALL', currentStake, this.duration, this.durationUnit, hBarrier, this.symbol),
+                this.bot.buy('PUT', currentStake, this.duration, this.durationUnit, lBarrier, this.symbol)
+            ]);
+
+            results.forEach((res, index) => {
+                const type = index === 0 ? 'HIGHER' : 'LOWER';
+                const barrier = index === 0 ? hBarrier : lBarrier;
+
+                if (res.status === 'fulfilled' && res.value && res.value.contract_id) {
+                    const t = res.value;
+                    this.pendingContracts.add(t.contract_id);
+                    this.totalStake += currentStake;
+                    this.tradeCount++;
+                    console.log(`💰 [Bot ${this.id}] ${type} Trade Executed (ID: ${t.contract_id}) at ${barrier}`);
+                } else {
+                    const errorMsg = res.status === 'rejected' ? (res.reason.message || res.reason) : 'Unknown error';
+                    console.error(`❌ [Bot ${this.id}] ${type} Buy Failed:`, errorMsg);
+                }
+            });
+
+        } catch (e) {
+            console.error(`[Bot ${this.id}] Simultaneous Buy Error:`, e.message);
+        } finally {
+            this.isTrading = false;
+        }
+    }
+}
+
 class FourBotStrategy {
     constructor() {
         this.strategies = [];
-        const defaultStakes = [0.35, 0.40, 0.80, 1.64, 3.36, 6.88, 14.10, 28.90, 60];
+        const defaultStakes = [0.35];
 
         // 1-10 Over
         for (let i = 1; i <= 10; i++) {
+            const prediction = i === 10 ? 0 : i;
             this.strategies.push(new SubStrategy(i, {
                 name: `Over Bot ${i}`,
                 type: 'DIGITOVER',
-                prediction: 5,
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100'
             }));
@@ -1118,10 +1303,11 @@ class FourBotStrategy {
         // 11-20 Under
         for (let i = 1; i <= 10; i++) {
             const id = i + 10;
+            const prediction = i === 10 ? 0 : i;
             this.strategies.push(new SubStrategy(id, {
                 name: `Under Bot ${i}`,
                 type: 'DIGITUNDER',
-                prediction: 4,
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100'
             }));
@@ -1130,10 +1316,11 @@ class FourBotStrategy {
         // 21-25 Odd Bots
         for (let i = 1; i <= 5; i++) {
             const id = i + 20;
+            const prediction = i; // 1, 2, 3, 4, 5
             this.strategies.push(new SubStrategy(id, {
                 name: `Odd Bot ${i}`,
                 type: 'DIGITODD',
-                prediction: undefined,
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100'
             }));
@@ -1142,10 +1329,11 @@ class FourBotStrategy {
         // 26-30 Even Bots
         for (let i = 1; i <= 5; i++) {
             const id = i + 25;
+            const prediction = (i + 5) === 10 ? 0 : (i + 5); // 6, 7, 8, 9, 0
             this.strategies.push(new SubStrategy(id, {
                 name: `Even Bot ${i}`,
                 type: 'DIGITEVEN',
-                prediction: undefined,
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100'
             }));
@@ -1190,24 +1378,27 @@ class FourBotStrategy {
         // 35-44 New Digit Differ Pattern Bots
         for (let i = 1; i <= 10; i++) {
             const id = i + 34;
+            const prediction = i === 10 ? 0 : i;
             this.strategies.push(new DigitDifferPatternBot(id, {
                 name: `Differ Bot ${i}`,
                 stake: 0.35,
                 stakes: defaultStakes,
                 symbol: 'R_100',
                 consecutiveCount: 4,
-                takeProfit: 10,
-                stopLoss: -50
+                takeProfit: 100,
+                stopLoss: -50,
+                barrier: prediction
             }));
         }
 
         // 45-54 New Digit Matches Bots
         for (let i = 1; i <= 10; i++) {
             const id = i + 44;
+            const prediction = i === 10 ? 0 : i;
             this.strategies.push(new SubStrategy(id, {
                 name: `Matches Bot ${i}`,
                 type: 'DIGITMATCH',
-                prediction: 5,
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100',
                 duration: 1
@@ -1217,10 +1408,11 @@ class FourBotStrategy {
         // 55-64 New Higher Bots
         for (let i = 1; i <= 10; i++) {
             const id = i + 54;
+            const prediction = i === 10 ? '+0' : `+${i}`;
             this.strategies.push(new SubStrategy(id, {
                 name: `Higher Bot ${i}`,
                 type: 'CALL', // CALL is used for Higher when a barrier (+X) is provided
-                prediction: '+0.1',
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100',
                 duration: 5
@@ -1230,10 +1422,11 @@ class FourBotStrategy {
         // 65-74 New Lower Bots
         for (let i = 1; i <= 10; i++) {
             const id = i + 64;
+            const prediction = i === 10 ? '-0' : `-${i}`;
             this.strategies.push(new SubStrategy(id, {
                 name: `Lower Bot ${i}`,
                 type: 'PUT', // PUT is used for Lower when a barrier (-X) is provided
-                prediction: '-0.1',
+                prediction: prediction,
                 stakes: defaultStakes,
                 symbol: 'R_100',
                 duration: 5
@@ -1251,6 +1444,21 @@ class FourBotStrategy {
             maxTotalStake: 9.5,
             digits: [0, 3, 2, 4, 1, 9, 6, 8, 5, 7]
         }));
+
+        // 76-85 Hedge Higher/Lower Bots (10 Instances)
+        for (let i = 0; i < 10; i++) {
+            const botId = 76 + i;
+            this.strategies.push(new HedgeHigherLowerBot(botId, {
+                name: `Hedge Hi/Lo Bot ${i + 1}`,
+                symbol: 'R_100',
+                stake: 0.35,
+                duration: 5,
+                higherBarrier: '+0.1',
+                lowerBarrier: '-0.1',
+                triggerDigit: 5,
+                triggerOperator: '='
+            }));
+        }
     }
 
     onStart(bot) {
