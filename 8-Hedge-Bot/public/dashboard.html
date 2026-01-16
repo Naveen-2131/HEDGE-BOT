@@ -437,6 +437,61 @@
             color: #ef4444;
             border: 1px solid #ef4444;
         }
+
+        /* --- Mobile Responsive Fixes --- */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .global-controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                width: 100%;
+            }
+
+            .global-controls button {
+                flex: 1;
+                margin-left: 0;
+                padding: 12px;
+                font-size: 14px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .card {
+                padding: 15px;
+            }
+
+            .form-group input,
+            .form-group select {
+                padding: 12px 8px;
+                /* Larger touch targets */
+                font-size: 16px !important;
+                /* Prevent auto-zoom on iOS */
+            }
+
+            .profit-display {
+                font-size: 24px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .btn {
+                padding: 12px;
+            }
+        }
     </style>
 </head>
 
@@ -482,6 +537,8 @@
                 onclick="toggleSection('lower')">📂 Lower Bots</button>
             <button class="btn" style="background-color: #f59e0b; flex: 1; min-width: 150px; padding: 10px;"
                 onclick="toggleSection('hedgematch')">📂 Hedge Match</button>
+            <button class="btn" style="background-color: #10b981; flex: 1; min-width: 150px; padding: 10px;"
+                onclick="toggleSection('hedgehilo')">📂 Hedge Hi/Lo</button>
         </div>
     </div>
 
@@ -576,6 +633,12 @@
     <div id="hedgematch-section" class="bot-section" style="display: none;">
         <h2>Hedge Match Bot (75)</h2>
         <div id="hedgematch-grid" class="bot-grid"></div>
+    </div>
+
+    <!-- Hedge Higher/Lower Bot Section -->
+    <div id="hedgehilo-section" class="bot-section" style="display: none;">
+        <h2>Hedge Higher/Lower Bot (76)</h2>
+        <div id="hedgehilo-grid" class="bot-grid"></div>
     </div>
 
     <!-- Dedicated Bot 21 Terminal -->
@@ -772,6 +835,7 @@
                 else if (bot.id >= 55 && bot.id <= 64) container = document.getElementById('higher-grid');
                 else if (bot.id >= 65 && bot.id <= 74) container = document.getElementById('lower-grid');
                 else if (bot.id === 75) container = document.getElementById('hedgematch-grid');
+                else if (bot.id >= 76 && bot.id <= 85) container = document.getElementById('hedgehilo-grid');
                 else return; // Skip bots with unknown IDs
 
                 let card = document.getElementById(`card-${bot.id}`);
@@ -810,7 +874,7 @@
                     
                     <div class="form-group">
                         <label>Symbol</label>
-                        <input type="text" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_10'}" list="marketList">
+                        <input type="search" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search Symbol">
                     </div>
 
                     <div class="form-group">
@@ -843,7 +907,7 @@
 
                     <div class="form-group">
                         <label>Take Profit ($)</label>
-                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 10}">
+                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 100}">
                     </div>
 
                     <div class="form-group">
@@ -871,7 +935,7 @@
                     
                     <div class="form-group">
                         <label>Symbol</label>
-                        <input type="text" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList">
+                        <input type="search" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search Symbol">
                     </div>
 
                     <div class="form-group">
@@ -892,7 +956,7 @@
 
                     <div class="form-group">
                         <label>Take Profit ($)</label>
-                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 10}">
+                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 100}">
                     </div>
 
                     <div class="form-group">
@@ -920,7 +984,7 @@
                     
                     <div class="form-group">
                         <label>Symbol</label>
-                        <input type="text" id="symbol-${bot.id}" value="${bot.config.symbol || '1HZ100V'}" list="marketList">
+                        <input type="search" id="symbol-${bot.id}" value="${bot.config.symbol || '1HZ100V'}" list="marketList" placeholder="Search Symbol">
                     </div>
 
                     <div class="form-group">
@@ -953,6 +1017,75 @@
                         <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
                     </div>
                 `;
+            } else if (bot.id >= 76 && bot.id <= 85) {
+                div.innerHTML = `
+                    <div class="card-header">
+                        <span><span class="status-dot" id="status-${bot.id}"></span> ${bot.name}</span>
+                        <small>ID: ${bot.id}</small>
+                    </div>
+                    <div class="checkbox-wrapper" style="justify-content: flex-end;">
+                         <label style="font-size: 0.9rem; color: var(--accent-blue); cursor: pointer;">
+                            <input type="checkbox" class="bot-check" value="${bot.id}"> Select to Start
+                         </label>
+                    </div>
+                    <div class="profit-display" id="profit-${bot.id}">$0.00</div>
+                    
+                    <div class="form-group">
+                        <label>Symbol</label>
+                        <input type="search" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search Symbol">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Stake ($)</label>
+                        <input type="number" step="0.01" id="stake-${bot.id}" value="${bot.config.stake}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Duration (ticks)</label>
+                        <input type="number" id="duration-${bot.id}" value="${bot.config.duration || 5}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Higher Barrier</label>
+                        <input type="text" id="higherBarrier-${bot.id}" value="${bot.config.higherBarrier || '+0.1'}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Lower Barrier</label>
+                        <input type="text" id="lowerBarrier-${bot.id}" value="${bot.config.lowerBarrier || '-0.1'}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Take Profit ($)</label>
+                        <input type="number" id="takeProfit-${bot.id}" value="${bot.config.takeProfit || 100}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Stop Loss ($)</label>
+                        <input type="number" id="stopLoss-${bot.id}" value="${bot.config.stopLoss || -10}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Martingale Stakes (comma sep)</label>
+                        <input type="text" id="martingale-${bot.id}" value="${(bot.config.martingaleStakes || []).join(', ')}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Trigger Condition</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select id="op-${bot.id}" style="width: 50px;">
+                                <option value="=" ${bot.config.triggerOperator === '=' ? 'selected' : ''}>=</option>
+                                <option value="<" ${bot.config.triggerOperator === '<' ? 'selected' : ''}>&lt;</option>
+                                <option value=">" ${bot.config.triggerOperator === '>' ? 'selected' : ''}>&gt;</option>
+                            </select>
+                            <input type="number" id="trig-${bot.id}" value="${bot.config.triggerDigit}" min="0" max="9" style="flex: 1;">
+                        </div>
+                    </div>
+
+                    <div class="card-actions">
+                        <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
+                    </div>
+                `;
             } else {
                 div.innerHTML = `
                     <div class="card-header">
@@ -968,7 +1101,7 @@
                     
                     <div class="form-group">
                         <label>Symbol</label>
-                        <input type="text" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search or Select Symbol">
+                        <input type="search" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search Symbol">
                     </div>
 
                     <div class="form-group">
@@ -986,7 +1119,7 @@
                     </div>` : ''}
                     <div class="form-group">
                         <label>Take Profit ($)</label>
-                        <input type="number" id="tp-${bot.id}" value="${bot.config.takeProfit || 0.5}">
+                        <input type="number" id="tp-${bot.id}" value="${bot.config.takeProfit || 100}">
                     </div>
                     <div class="form-group">
                         <label>Stop Loss ($)</label>
@@ -1074,6 +1207,24 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         stake, symbol, duration, tradeInterval, maxTotalStake, digits
+                    })
+                });
+            } else if (id >= 76 && id <= 85) {
+                const duration = document.getElementById(`duration-${id}`).value;
+                const higherBarrier = document.getElementById(`higherBarrier-${id}`).value;
+                const lowerBarrier = document.getElementById(`lowerBarrier-${id}`).value;
+                const takeProfit = document.getElementById(`takeProfit-${id}`).value;
+                const stopLoss = document.getElementById(`stopLoss-${id}`).value;
+                const martingaleStr = document.getElementById(`martingale-${id}`).value;
+                const triggerDigit = document.getElementById(`trig-${id}`).value;
+                const triggerOperator = document.getElementById(`op-${id}`).value;
+
+                await fetch(`${API_URL}/update/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stake, symbol, duration, higherBarrier, lowerBarrier,
+                        takeProfit, stopLoss, martingaleStr, triggerDigit, triggerOperator
                     })
                 });
             } else {
