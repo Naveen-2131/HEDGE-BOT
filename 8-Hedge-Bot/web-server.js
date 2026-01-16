@@ -118,42 +118,6 @@ async function initDeriv() {
             fullname: auth.authorize.fullname
         };
 
-        // --- Rate Limiter ---
-        const requestQueue = [];
-        let isProcessingQueue = false;
-        const MIN_REQUEST_INTERVAL = 340; // ~3 requests per second max
-
-        async function processQueue() {
-            if (isProcessingQueue) return;
-            isProcessingQueue = true;
-
-            while (requestQueue.length > 0) {
-                const { action, resolve, reject } = requestQueue.shift();
-                try {
-                    const result = await action();
-                    resolve(result);
-                } catch (e) {
-                    if (e.error && e.error.code === 'RateLimit') {
-                        console.log('⚠️ Rate Limit hit. Pausing...');
-                        await new Promise(r => setTimeout(r, 2000));
-                        reject(e);
-                    } else {
-                        reject(e);
-                    }
-                }
-                await new Promise(r => setTimeout(r, MIN_REQUEST_INTERVAL));
-            }
-            isProcessingQueue = false;
-        }
-
-        function scheduleRequest(action) {
-            return new Promise((resolve, reject) => {
-                requestQueue.push({ action, resolve, reject });
-                processQueue();
-            });
-        }
-        // ---------------------
-
         // Initialize Strategy if not exists
         if (!strategy) {
             strategy = new FourBotStrategy();
@@ -164,23 +128,18 @@ async function initDeriv() {
             api: api,
             balance: account.balance,
             checkContract: async (id) => {
-                return scheduleRequest(async () => {
-                    try {
-                        const res = await api.basic.proposalOpenContract({ contract_id: id });
-                        if (res.error) {
-                            if (res.error.code !== 'RateLimit') console.error('CheckContract Error:', res.error);
-                            return null;
-                        }
-                        return res.proposal_open_contract ? {
-                            is_sold: res.proposal_open_contract.is_sold,
-                            profit: res.proposal_open_contract.profit,
-                            status: res.proposal_open_contract.status
-                        } : null;
-                    } catch (e) {
-                        if (e?.error?.code !== 'RateLimit') console.error('CheckContract Exception:', e);
+                try {
+                    const res = await api.basic.proposalOpenContract({ contract_id: id });
+                    if (res.error) {
+                        console.error('CheckContract Error:', res.error);
                         return null;
                     }
-                });
+                    return res.proposal_open_contract ? {
+                        is_sold: res.proposal_open_contract.is_sold,
+                        profit: res.proposal_open_contract.profit,
+                        status: res.proposal_open_contract.status
+                    } : null;
+                } catch (e) { console.error('CheckContract Exception:', e); return null; }
             },
             buy: async (type, amount, duration, unit, prediction, symbol) => {
                 let contractType = type;
@@ -215,30 +174,27 @@ async function initDeriv() {
                 }
 
 
-                // Schedule the Proposal + Buy sequence
-                return scheduleRequest(async () => {
-                    const proposal = await api.basic.proposal(req);
-                    if (proposal.error) {
-                        console.error('Proposal Request:', JSON.stringify(req));
-                        console.error('Proposal Error Response:', JSON.stringify(proposal));
-                        const msg = proposal.error.message || proposal.error.code || "Unknown Proposal Error";
-                        throw new Error(msg);
-                    }
+                const proposal = await api.basic.proposal(req);
+                if (proposal.error) {
+                    console.error('Proposal Request:', JSON.stringify(req));
+                    console.error('Proposal Error Response:', JSON.stringify(proposal));
+                    const msg = proposal.error.message || proposal.error.code || "Unknown Proposal Error";
+                    throw new Error(msg);
+                }
 
-                    if (!proposal.proposal) {
-                        console.error('Proposal Missing:', JSON.stringify(proposal));
-                        throw new Error("Proposal not received from API");
-                    }
+                if (!proposal.proposal) {
+                    console.error('Proposal Missing:', JSON.stringify(proposal));
+                    throw new Error("Proposal not received from API");
+                }
 
-                    const buy = await api.basic.buy({ buy: proposal.proposal.id, price: parseFloat(amount) });
-                    if (buy.error) {
-                        console.error('Buy Error Response:', JSON.stringify(buy));
-                        const msg = buy.error.message || buy.error.code || "Unknown Buy Error";
-                        throw new Error(msg);
-                    }
+                const buy = await api.basic.buy({ buy: proposal.proposal.id, price: parseFloat(amount) });
+                if (buy.error) {
+                    console.error('Buy Error Response:', JSON.stringify(buy));
+                    const msg = buy.error.message || buy.error.code || "Unknown Buy Error";
+                    throw new Error(msg);
+                }
 
-                    return { contract_id: buy.buy.contract_id };
-                });
+                return { contract_id: buy.buy.contract_id };
             }
         };
 
