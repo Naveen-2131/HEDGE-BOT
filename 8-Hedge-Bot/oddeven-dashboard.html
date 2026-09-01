@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odd/Even Bot Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .global-controls button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .btn-start-all {
+            background-color: var(--accent-green);
+            color: white;
+        }
+
+        .btn-stop-all {
+            background-color: var(--accent-red);
+            color: white;
+        }
+
+        .btn-settings {
+            background-color: #64748b;
+            color: white;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #64748b;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-running {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .profit-display {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 10px 0;
+            color: var(--text-primary);
+        }
+
+        .profit-pos {
+            color: var(--accent-green);
+        }
+
+        .profit-neg {
+            color: var(--accent-red);
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: white;
+        }
+
+        .btn-update {
+            background-color: var(--accent-blue);
+        }
+
+        .btn-toggle {
+            background-color: #64748b;
+        }
+
+        .total-stats {
+            background: rgba(16, 185, 129, 0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--accent-green);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            margin: 5% auto;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            width: 90%;
+            max-width: 500px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+        }
+
+        .log-box {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            border-radius: 5px;
+            border: 1px solid #333;
+            font-size: 0.85rem;
+        }
+
+        .fab-log {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--accent-blue);
+            color: white;
+            padding: 15px;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            font-size: 24px;
+            border: none;
+            z-index: 999;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .bot-check {
+            transform: scale(1.5);
+            cursor: pointer;
+        }
+
+        input[list]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.6;
+            cursor: pointer;
+        }
+
+        input[list]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .status-online {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+
+        .status-offline {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div>
+            <h1>🎲 Odd/Even Bot Dashboard</h1>
+            <div id="connection-status" class="status-badge status-offline">Checking Connection...</div>
+            <div id="total-profit" class="total-stats">Total Profit: $0.00</div>
+        </div>
+        <div class="global-controls">
+            <button class="btn-settings" onclick="openSettings()">⚙️ Settings</button>
+            <button class="btn-start-all" onclick="startAll()">Start All</button>
+            <button class="btn-start-all" onclick="startSelected()" style="background-color: #2196F3;">Start
+                Selected</button>
+            <button class="btn-stop-all" onclick="stopAll()">Stop All</button>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 10px; width: 100%;">
+            <button class="btn"
+                style="background-color: var(--accent-purple); flex: 0 0 auto; width: auto; padding: 10px 20px;"
+                onclick="toggleSection('odd')">📂 Open Odd Bots</button>
+            <button class="btn"
+                style="background-color: var(--accent-pink); flex: 0 0 auto; width: auto; padding: 10px 20px;"
+                onclick="toggleSection('even')">📂 Open Even Bots</button>
+        </div>
+    </div>
+
+    <!-- Odd Bots Section -->
+    <div id="odd-section"
+        style="display:none; margin-bottom: 40px; border: 1px solid var(--accent-purple); padding: 20px; border-radius: 12px;">
+        <h2 style="color: var(--accent-purple); margin-top: 0;">Odd Bots (1-10)</h2>
+        <div class="grid" id="odd-grid"></div>
+    </div>
+
+    <!-- Even Bots Section -->
+    <div id="even-section"
+        style="display:none; margin-bottom: 40px; border: 1px solid var(--accent-pink); padding: 20px; border-radius: 12px;">
+        <h2 style="color: var(--accent-pink); margin-top: 0;">Even Bots (11-20)</h2>
+        <div class="grid" id="even-grid"></div>
+    </div>
+
+    <!-- Floating Log Button -->
+    <button class="fab-log" onclick="toggleLogs()">📜</button>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeSettings()">&times;</span>
+            <h2>⚙️ API Settings</h2>
+            <div class="form-group">
+                <label>Deriv App ID</label>
+                <input type="text" id="setting-app-id" placeholder="e.g. 1089">
+            </div>
+            <div class="form-group">
+                <label>Deriv API Token</label>
+                <input type="password" id="setting-token" placeholder="Enter Token">
+            </div>
+            <button class="btn btn-update" onclick="saveSettings()">Save & Reconnect</button>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div id="logModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-btn" onclick="toggleLogs()">&times;</span>
+            <h2>Bot Logs</h2>
+            <div id="logContainer" class="log-box">Loading logs...</div>
+            <button onclick="fetchLogs()"
+                style="margin-top: 10px; padding: 10px; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">Refresh
+                Logs</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        const MARKETS = [
+            "R_10", "R_25", "R_50", "R_75", "R_100",
+            "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
+            "RDBEAR", "RDBULL",
+            "JD10", "JD25", "JD50", "JD75", "JD100",
+            "WLDAUD",
+            "frxAUDCAD", "frxAUDCHF", "frxAUDJPY", "frxAUDNZD", "frxAUDUSD",
+            "OTC_AS51",
+            "cryBTCUSD",
+            "BOOM300N", "BOOM500", "BOOM600", "BOOM900", "BOOM1000",
+            "CRASH300N", "CRASH500", "CRASH600", "CRASH900", "CRASH1000",
+            "cryETHUSD",
+            "WLDEUR",
+            "frxEURAUD", "frxEURCAD", "frxEURCHF", "frxEURGBP", "frxEURJPY", "frxEURNZD", "frxEURUSD",
+            "OTC_SX5E", "OTC_FCHI",
+            "WLDGBP",
+            "frxGBPAUD", "frxGBPCAD", "frxGBPCHF", "frxGBPJPY", "frxGBPNOK", "frxGBPNZD", "frxGBPUSD",
+            "OTC_GDAXI",
+            "WLDXAU", "frxXAUUSD",
+            "OTC_HSI", "OTC_N225",
+            "frxNZDJPY", "frxNZDUSD",
+            "OTC_AEX",
+            "frxXPDUSD", "frxXPTUSD",
+            "RB100", "RB200",
+            "frxXAGUSD",
+            "stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5",
+            "OTC_SSMI", "OTC_FTSE", "OTC_SPC", "OTC_NDX",
+            "WLDUSD",
+            "frxUSDCAD", "frxUSDCHF", "frxUSDJPY", "frxUSDMXN", "frxUSDNOK", "frxUSDPLN", "frxUSDSEK",
+            "OTC_DJI"
+        ];
+
+        // Initialize Datalist
+        (function initMarkets() {
+            const dl = document.createElement('datalist');
+            dl.id = 'marketList';
+            const unique = [...new Set(MARKETS)];
+            unique.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                dl.appendChild(opt);
+            });
+            document.body.appendChild(dl);
+        })();
+
+        // Settings Logic
+        function openSettings() {
+            document.getElementById('settingsModal').style.display = 'block';
+            fetchStatus().then(data => {
+                if (data && data.settings) {
+                    document.getElementById('setting-app-id').value = data.settings.appId;
+                }
+            });
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        async function saveSettings() {
+            const appId = document.getElementById('setting-app-id').value;
+            const token = document.getElementById('setting-token').value;
+
+            try {
+                const res = await fetch(`${API_URL}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appId, token })
+                });
+                const data = await res.json();
+                alert(data.message);
+                closeSettings();
+            } catch (e) {
+                alert('Error saving settings');
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch(`${API_URL}/status`);
+                if (res.status === 503) {
+                    document.getElementById('total-profit').textContent = "System Initializing...";
+                    document.getElementById('total-profit').style.color = "orange";
+                    return null;
+                }
+
+                const data = await res.json();
+
+                if (data.bots) {
+                    renderBots(data.bots);
+                    updateTotal(data.totalProfit);
+                    updateConnectionStatus(data.connected);
+                }
+                return data;
+            } catch (e) {
+                console.error("Fetch failed", e);
+                updateConnectionStatus(false);
+                return null;
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const el = document.getElementById('connection-status');
+            if (connected) {
+                el.textContent = "● Connected";
+                el.className = "status-badge status-online";
+            } else {
+                el.textContent = "● Disconnected";
+                el.className = "status-badge status-offline";
+            }
+        }
+
+        function updateTotal(profit) {
+            const el = document.getElementById('total-profit');
+            el.textContent = `Total Profit: $${profit.toFixed(2)}`;
+            el.className = `total-stats ${profit >= 0 ? '' : 'profit-neg'}`;
+        }
+
+        function renderBots(bots) {
+            const oddGrid = document.getElementById('odd-grid');
+            const evenGrid = document.getElementById('even-grid');
+
+            bots.forEach(bot => {
+                const container = bot.id <= 10 ? oddGrid : evenGrid;
+                let card = document.getElementById(`card-${bot.id}`);
+                if (!card) {
+                    card = createCard(bot);
+                    container.appendChild(card);
+                }
+                updateCard(card, bot);
+            });
+        }
+
+        function toggleSection(type) {
+            const section = document.getElementById(`${type}-section`);
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
+            }
+        }
+
+        function createCard(bot) {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.id = `card-${bot.id}`;
+            div.innerHTML = `
+                <div class="card-header">
+                    <span><span class="status-dot" id="status-${bot.id}"></span> ${bot.name}</span>
+                    <small>ID: ${bot.id} (${bot.config.type})</small>
+                </div>
+                <div class="checkbox-wrapper" style="justify-content: flex-end;">
+                     <label style="font-size: 0.9rem; color: var(--accent-blue); cursor: pointer;">
+                        <input type="checkbox" class="bot-check" value="${bot.id}"> Select to Start
+                     </label>
+                </div>
+                <div class="profit-display" id="profit-${bot.id}">$0.00</div>
+                
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <input type="text" id="symbol-${bot.id}" value="${bot.config.symbol || 'R_100'}" list="marketList" placeholder="Search or Select Symbol">
+                </div>
+
+                <div class="form-group">
+                    <label>Stake ($)</label>
+                    <input type="number" step="0.01" id="stake-${bot.id}" value="${bot.config.stake}">
+                </div>
+                <div class="form-group">
+                    <label>Duration (ticks)</label>
+                    <input type="number" id="duration-${bot.id}" value="${bot.config.duration}">
+                </div>
+                <div class="form-group">
+                    <label>Interval (ms)</label>
+                    <input type="number" id="interval-${bot.id}" value="${bot.config.interval}">
+                </div>
+                <div class="form-group">
+                    <label>Max Total Stake ($)</label>
+                    <input type="number" step="0.01" id="maxStake-${bot.id}" value="${bot.config.maxTotalStake}">
+                </div>
+
+                <div class="card-actions">
+                    <button class="btn btn-update" onclick="updateBot(${bot.id})">Update</button>
+                    <button class="btn btn-toggle" id="btn-toggle-${bot.id}" onclick="toggleBot(${bot.id}, ${bot.isRunning})">Start</button>
+                </div>
+            `;
+            return div;
+        }
+
+        function updateCard(card, bot) {
+            const dot = card.querySelector(`#status-${bot.id}`);
+            dot.className = `status-dot ${bot.isRunning ? 'status-running' : ''}`;
+
+            const profit = card.querySelector(`#profit-${bot.id}`);
+            profit.textContent = `$${bot.profit.toFixed(2)}`;
+            profit.className = `profit-display ${bot.profit >= 0 ? 'profit-pos' : 'profit-neg'}`;
+
+            const btn = card.querySelector(`#btn-toggle-${bot.id}`);
+            btn.textContent = bot.isRunning ? 'Stop' : 'Start';
+            btn.className = `btn ${bot.isRunning ? 'btn-stop-all' : 'btn-start-all'}`;
+            btn.onclick = () => toggleBot(bot.id, bot.isRunning);
+        }
+
+        async function updateBot(id) {
+            const stake = document.getElementById(`stake-${id}`).value;
+            const duration = document.getElementById(`duration-${id}`).value;
+            const interval = document.getElementById(`interval-${id}`).value;
+            const maxTotalStake = document.getElementById(`maxStake-${id}`).value;
+            const symbol = document.getElementById(`symbol-${id}`).value;
+
+            await fetch(`${API_URL}/update/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    stake, duration, interval, maxTotalStake, symbol
+                })
+            });
+            alert('Config Updated! If symbol changed, bot will reconnect.');
+            fetchStatus();
+        }
+
+        async function toggleBot(id, isRunning) {
+            const action = isRunning ? 'stop' : 'start';
+            await fetch(`${API_URL}/${action}/${id}`, { method: 'POST' });
+            fetchStatus();
+        }
+
+        async function startAll() {
+            await fetch(`${API_URL}/start-all`, { method: 'POST' });
+            fetchStatus();
+        }
+
+        async function stopAll() {
+            await fetch(`${API_URL}/stop-all`, { method: 'POST' });
+            fetchStatus();
+        }
+
+        async function startSelected() {
+            const checks = document.querySelectorAll('.bot-check:checked');
+            if (checks.length === 0) return alert('Please select at least one bot to start!');
+            for (const chk of checks) {
+                await fetch(`${API_URL}/start/${chk.value}`, { method: 'POST' });
+            }
+            fetchStatus();
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch(`${API_URL}/logs`);
+                const data = await res.json();
+                const container = document.getElementById('logContainer');
+                container.innerHTML = data.logs.join('<br>');
+                container.scrollTop = container.scrollHeight;
+            } catch (e) { console.error(e); }
+        }
+
+        function toggleLogs() {
+            const modal = document.getElementById('logModal');
+            const isOpen = modal.style.display === 'block';
+            modal.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) fetchLogs();
+        }
+
+        window.onclick = function (event) {
+            const logModal = document.getElementById('logModal');
+            const setModal = document.getElementById('settingsModal');
+            if (event.target == logModal) logModal.style.display = "none";
+            if (event.target == setModal) setModal.style.display = "none";
+        }
+
+        setInterval(fetchStatus, 1000);
+        fetchStatus();
+    </script>
+</body>
+
+</html>
