@@ -1,4 +1,4 @@
-﻿class SubStrategy {
+class SubStrategy {
     constructor(id, config) {
         this.id = id;
         this.name = config.name;
