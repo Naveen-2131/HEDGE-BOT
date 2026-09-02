@@ -146,6 +146,17 @@ class DerivBrowserClient {
         this.isAuthorized = false;
         this.stopPing();
         this.emit('disconnected', {});
+
+        if (this.token && !this._manualDisconnect) {
+          this.emit('log', { type: 'warning', msg: '⚡ Disconnected from Deriv. Auto-reconnecting in 2 seconds...' });
+          setTimeout(() => {
+            if (!this.isConnected && this.token) {
+              this.connect(this.appId, this.token).catch(err => {
+                this.emit('log', { type: 'error', msg: `Auto-reconnect failed: ${err.message}` });
+              });
+            }
+          }, 2000);
+        }
       };
     });
   }
@@ -202,7 +213,6 @@ class DerivBrowserClient {
       this.ws.onerror = () => {
         clearTimeout(timeout);
         this.isConnected = false;
-        reject(new Error('WebSocket connection error'));
       };
 
       this.ws.onclose = () => {
@@ -210,6 +220,17 @@ class DerivBrowserClient {
         this.isAuthorized = false;
         this.stopPing();
         this.emit('disconnected', {});
+
+        if (this.token && !this._manualDisconnect) {
+          this.emit('log', { type: 'warning', msg: '⚡ Disconnected from Deriv. Auto-reconnecting in 2 seconds...' });
+          setTimeout(() => {
+            if (!this.isConnected && this.token) {
+              this.connect(this.appId, this.token).catch(err => {
+                this.emit('log', { type: 'error', msg: `Auto-reconnect failed: ${err.message}` });
+              });
+            }
+          }, 2000);
+        }
       };
     });
   }
@@ -336,7 +357,7 @@ class DerivBrowserClient {
     this.stopPing();
     this.pingInterval = setInterval(() => {
       if (this.isConnected) this.send({ ping: 1 }).catch(() => {});
-    }, 15000);
+    }, 10000);
   }
 
   stopPing() {
