@@ -39,16 +39,22 @@ class HedgeClientAdapter {
     };
 
     // Auto connect if saved credentials exist
-    const appId = localStorage.getItem('hedge_app_id') || '1089';
-    const token = localStorage.getItem('hedge_api_token') || '';
+    const appId = localStorage.getItem('hedge_app_id') || localStorage.getItem('deriv_app_id') || '1089';
+    const token = localStorage.getItem('hedge_api_token') || localStorage.getItem('deriv_api_token') || '';
     if (token) {
       setTimeout(() => this.connect(appId, token), 500);
     }
   }
 
   async connect(appId, token) {
-    if (appId) localStorage.setItem('hedge_app_id', appId);
-    if (token) localStorage.setItem('hedge_api_token', token);
+    if (appId) {
+      localStorage.setItem('hedge_app_id', appId);
+      localStorage.setItem('deriv_app_id', appId);
+    }
+    if (token) {
+      localStorage.setItem('hedge_api_token', token);
+      localStorage.setItem('deriv_api_token', token);
+    }
 
     try {
       await this.client.connect(appId, token);
