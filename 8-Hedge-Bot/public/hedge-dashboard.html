@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>8-Bot Hedge Dashboard | Deriv Automated Trading</title>
+  <meta name="description" content="Professional 85-bot hedge trading dashboard for Deriv. Runs entirely in your browser — no server needed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/hedge-styles.css">
+</head>
+<body>
+  <!-- API Keys Modal -->
+  <div id="apiModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          API CREDENTIALS
+        </div>
+        <button class="modal-close" id="btnCloseModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin:0 0 1rem;">Enter your Deriv API Credentials or REST Token</p>
+      <div class="form-group">
+        <label class="form-label">DERIV APP ID</label>
+        <input type="text" id="inputAppId" class="form-input" value="1089" placeholder="1089">
+      </div>
+      <div class="form-group">
+        <label class="form-label">API TOKEN</label>
+        <input type="password" id="inputToken" class="form-input" placeholder="Paste your API token here">
+      </div>
+      <button class="btn btn-primary btn-full" id="btnSaveConnect">SAVE & CONNECT</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+            <polyline points="16 7 22 7 22 13"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">8-BOT HEDGE DASHBOARD</div>
+          <div class="brand-sub">Deriv Automated Trading • 85+ Strategies</div>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- Connection Badge -->
+        <div class="conn-badge badge-disconnected" id="connBadge">
+          <span class="conn-dot" id="connDot"></span>
+          <span id="connText">DISCONNECTED</span>
+        </div>
+
+        <!-- Balance -->
+        <div class="balance-pill">
+          <span class="balance-label">BALANCE</span>
+          <span class="balance-value" id="balanceDisplay">— —</span>
+        </div>
+
+        <!-- Total PnL -->
+        <div class="pnl-pill">
+          <span class="pnl-label">SESSION P&L</span>
+          <span class="total-pnl" id="totalPnL">$0.00</span>
+        </div>
+
+        <!-- API Keys Button -->
+        <button class="btn btn-secondary" id="btnOpenModal">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          API KEYS
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Controls & Category Filter Bar -->
+    <div class="controls-bar">
+      <div class="controls-left">
+        <button class="btn btn-success" id="btnStartAll">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          START ALL
+        </button>
+        <button class="btn btn-danger" id="btnStopAll">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+          STOP ALL
+        </button>
+        <button class="btn btn-secondary" id="btnResetAll">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.16"/></svg>
+          RESET ALL
+        </button>
+        <button class="btn btn-accent" style="background:#06b6d4;color:#000;" onclick="window.location.href='/accumulator/index.html'">
+          📈 ACCUMULATOR BOT
+        </button>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="filter-tabs">
+        <button class="filter-btn active" data-filter="ALL">ALL</button>
+        <button class="filter-btn" data-filter="Over">OVER</button>
+        <button class="filter-btn" data-filter="Under">UNDER</button>
+        <button class="filter-btn" data-filter="Odd/Even">ODD/EVEN</button>
+        <button class="filter-btn" data-filter="Pattern Bots">PATTERNS</button>
+        <button class="filter-btn" data-filter="Differ">DIFFER</button>
+        <button class="filter-btn" data-filter="Matches">MATCHES</button>
+        <button class="filter-btn" data-filter="Higher/Lower">HI/LO</button>
+        <button class="filter-btn" data-filter="Hedge">HEDGE</button>
+      </div>
+    </div>
+
+    <!-- Main Layout: Bots + Log -->
+    <div class="main-layout">
+      <!-- Bot Cards Area -->
+      <div class="bots-area" id="botCardsContainer">
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>Connect your API token to load bots with custom configs...</p>
+        </div>
+      </div>
+
+      <!-- Execution Log Sidebar -->
+      <aside class="log-sidebar">
+        <div class="log-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          EXECUTION LOG
+        </div>
+        <div class="log-console" id="logConsole"></div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/deriv-client.js"></script>
+  <script src="js/4bot-browser.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

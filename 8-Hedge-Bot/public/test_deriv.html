@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head><title>Deriv Higher/Lower Test</title></head>
+<body style="background:#111; color:#0f0; font-family:monospace; padding:20px;">
+<h2>Deriv Higher/Lower API Test</h2>
+<div id="output">Connecting...</div>
+
+<script>
+const out = document.getElementById('output');
+const results = { contracts: [], tests: [] };
+
+function log(msg) {
+    out.innerHTML += '<div>' + msg + '</div>';
+    console.log(msg);
+}
+
+const ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089');
+
+ws.onopen = () => {
+    log('Connected to Deriv WS');
+    ws.send(JSON.stringify({ contracts_for: 'R_10', req_id: 1 }));
+};
+
+ws.onmessage = (evt) => {
+    const data = JSON.parse(evt.data);
+    
+    if (data.req_id === 1 && data.contracts_for) {
+        log('Contracts for R_10 received: total ' + data.contracts_for.available.length);
+        const hl = data.contracts_for.available.filter(c => 
+            c.contract_category === 'higherlower' || 
+            c.contract_type === 'HIGHER' || 
+            c.contract_type === 'LOWER' ||
+            c.contract_type === 'CALL' ||
+            c.contract_type === 'PUT'
+        );
+        hl.forEach(c => {
+            results.contracts.push({
+                type: c.contract_type,
+                cat: c.contract_category,
+                min: c.min_contract_duration,
+                max: c.max_contract_duration,
+                barriers: c.barriers,
+                barrier_category: c.barrier_category
+            });
+            log(`<b>${c.contract_type}</b> | cat: ${c.contract_category} | min: ${c.min_contract_duration} | max: ${c.max_contract_duration} | barriers: ${c.barriers}`);
+        });
+
+        // Test 10: HIGHER with barrier +0.1 duration 5t
+        ws.send(JSON.stringify({
+            proposal: 1, amount: 1, basis: 'stake',
+            contract_type: 'HIGHER', currency: 'USD',
+            duration: 5, duration_unit: 't', barrier: '+0.1', symbol: 'R_10', req_id: 10
+        }));
+
+        // Test 11: CALL with barrier +0.1 duration 5t
+        ws.send(JSON.stringify({
+            proposal: 1, amount: 1, basis: 'stake',
+            contract_type: 'CALL', currency: 'USD',
+            duration: 5, duration_unit: 't', barrier: '+0.1', symbol: 'R_10', req_id: 11
+        }));
+
+        // Test 12: LOWER with barrier -0.1 duration 5t
+        ws.send(JSON.stringify({
+            proposal: 1, amount: 1, basis: 'stake',
+            contract_type: 'LOWER', currency: 'USD',
+            duration: 5, duration_unit: 't', barrier: '-0.1', symbol: 'R_10', req_id: 12
+        }));
+
+        // Test 13: HIGHER on R_100 with barrier +0.1 duration 5t
+        ws.send(JSON.stringify({
+            proposal: 1, amount: 1, basis: 'stake',
+            contract_type: 'HIGHER', currency: 'USD',
+            duration: 5, duration_unit: 't', barrier: '+0.1', symbol: 'R_100', req_id: 13
+        }));
+    } else if (data.req_id >= 10 && data.req_id <= 13) {
+        log(`<hr>Test ${data.req_id}: ` + JSON.stringify(data));
+        results.tests.push({ req_id: data.req_id, data });
+
+        if (results.tests.length === 4) {
+            fetch('/api/test_log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(results)
+            }).then(() => log('<b>TEST RESULTS SAVED!</b>'));
+        }
+    }
+};
+</script>
+</body>
+</html>

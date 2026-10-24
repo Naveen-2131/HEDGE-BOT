@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Deriv Over/Under Web Bot</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #111;
+            color: #0f0;
+            padding: 20px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            margin: 4px 0;
+            padding: 6px;
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .btn-start {
+            background: #00ff88;
+            color: #000;
+        }
+
+        .btn-stop {
+            background: #ff4444;
+            color: #fff;
+        }
+
+        pre {
+            background: #000;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #333;
+            line-height: 1.4;
+        }
+
+        .config-box {
+            background: #222;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #aaa;
+        }
+
+        h2 {
+            color: #00ff88;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .note {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>🚀 Deriv Over/Under Web Bot</h2>
+
+    <div class="config-box">
+        <label>APP_ID:</label>
+        <input id="app_id" value="118515">
+
+        <label>API_TOKEN:</label>
+        <input id="api_token" value="BwDAE6dzfr7FOak">
+
+        <label>SYMBOL:</label>
+        <input id="symbol" value="R_10">
+
+        <label>STAKE:</label>
+        <input id="stake" value="0.35" type="number" step="0.01">
+
+        <label>BARRIER (Prediction 0-9):</label>
+        <input id="barrier" value="5" type="number">
+        <div class="note">💡 Leave empty for <b>RANDOM</b> barrier (1-8).</div>
+
+
+        <label>DURATION (ticks):</label>
+        <input id="duration" value="1" type="number">
+
+        <label>TRADE_INTERVAL (ms):</label>
+        <input id="trade_interval" value="600" type="number">
+
+        <label>MAX_TOTAL_STAKE:</label>
+        <input id="max_total_stake" value="9.5" type="number" step="0.01">
+
+        <label>TRADE_PATTERN (comma separated):</label>
+        <input id="pattern" value="" placeholder="e.g. OVER, UNDER, OVER">
+        <div class="note">💡 Leave empty for <b>RANDOM</b> Over/Under trades.</div>
+    </div>
+
+    <button class="btn-start" onclick="startBot()">▶ Start Bot</button>
+    <button class="btn-stop" onclick="stopBot()">⏹ Stop Bot</button>
+
+    <h3>📜 Bot Log</h3>
+    <pre id="log"></pre>
+
+    <script>
+        const logBox = document.getElementById("log");
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logBox.textContent += `[${time}] ${msg}\n`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function startBot() {
+            logBox.textContent = ""; // Clear log on start
+            log("▶ Starting bot...");
+            const config = {
+                APP_ID: document.getElementById("app_id").value,
+                API_TOKEN: document.getElementById("api_token").value,
+                SYMBOL: document.getElementById("symbol").value,
+                STAKE: parseFloat(document.getElementById("stake").value),
+                BARRIER: parseInt(document.getElementById("barrier").value),
+                DURATION: parseInt(document.getElementById("duration").value),
+                TRADE_INTERVAL: parseInt(document.getElementById("trade_interval").value),
+                MAX_TOTAL_STAKE: parseFloat(document.getElementById("max_total_stake").value),
+                TRADE_PATTERN: document.getElementById("pattern").value.split(",").map(p => p.trim().toUpperCase()),
+            };
+
+            try {
+                const response = await fetch("/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config),
+                });
+                const result = await response.text();
+                log(result);
+            } catch (err) {
+                log("❌ Error connecting to server: " + err.message);
+            }
+        }
+
+        async function stopBot() {
+            log("⏹ Stopping bot...");
+            try {
+                const response = await fetch("/stop");
+                const result = await response.text();
+                log(result);
+            } catch (err) {
+                log("❌ Error stopping bot: " + err.message);
+            }
+        }
+
+        const evtSource = new EventSource("/logs");
+        evtSource.onmessage = (event) => log(event.data);
+        evtSource.onerror = () => {
+            // Optional: handle reconnection or logging
+        };
+    </script>
+</body>
+
+</html>
